@@ -35,7 +35,22 @@ from db import create_tables, create_connection, close_connection
 import random
 from config import Config
 
-fake = Faker()
+Regions = { 
+  "Asia": ['hi_IN', 'zh_CN', 'ja_JP', 'ko_KR', 'th_TH', 'ru_RU'],
+  "Middle East": ['ar_AA', 'ar_EG', 'ar_JO', 'ar_PS', 'ar_SA'],
+  "Europe": ['da_DK', 'de_AT', 'de_CH', 'de_DE', 'dk_DK', 'el_GR', 'es_ES', 'fr_BE', 'fr_CA', 'fr_CH','fr_FR', 'fr_QC', 'it_CH', 'it_IT', 'nl_BE', 'nl_NL', 'no_NO', 'pl_PL', 'pt_PT', 'ro_RO', 'sk_SK', 'sl_SI', 'sv_SE'],
+  "LatAm": ['es_AR', 'es_BO', 'es_CL', 'es_CO', 'es_CR', 'es_DO', 'es_EC', 'es_ES'],
+  "Africa": ['ar_AA', 'ar_EG', 'ar_JO', 'ar_PS', 'ar_SA', 'tw_GH'],
+  "East Asia": ['zh_CN', 'zh_TW', 'ja_JP', 'ko_KR', 'th_TH'],
+  "East Europe": ['bg_BG', 'cs_CZ', 'uk_UA', 'ru_RU', 'ro_RO', 'pl_PL', 'sk_SK', 'sl_SI']
+}
+
+
+
+if Not Config.Region:
+    fake = Faker()
+else:
+    fake = Faker(Regions[Config.Region])
 
 # function to show all locales in Faker
 
@@ -1113,6 +1128,7 @@ def seed_purchase_orders(po_count=100000, days_back=720, product_filter="All Sol
 #     MAX_ORDERS_PER_CUSTOMER = 2
 #     ITERATIONS_IN_TEST_MODE = 10
 #     SQL_SERVER_LOCAL = False
+#     Region = "LatAm"
 
 # # ---------------------------
 # # SQL Server Connection
