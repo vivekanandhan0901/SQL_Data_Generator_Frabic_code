@@ -31,11 +31,16 @@
 # META   "language_group": "synapse_pyspark"
 # META }
 
+# MARKDOWN ********************
+
+# # Configuration class for controlling data generation parameters 
+
+
 # CELL ********************
 
 # config_notebook (Microsoft Fabric Notebook)
 
-# Define configuration values as global variables or within a class
+# # Define configuration values as global variables or within a class
 # class Config:
 #     ORDER_GENERATION_DATE = "2024-01-01" # Date from which orders will be generated
 #     inStockOnly = True         # Only generate orders for products that are in stock
@@ -65,6 +70,8 @@ class Config:
     MAX_WAREHOUSES = 2
     TEST_MODE = False
     DEFAULT_BATCH_SIZE = 200
+    Region = "LatAm"  
+
 
 
 # METADATA ********************
@@ -73,6 +80,10 @@ class Config:
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
+# MARKDOWN ********************
+
+# ## SQLAlchemy models for defining Product, Customer, Order, Transaction, and OrderItem tables
 
 # CELL ********************
 
@@ -156,53 +167,69 @@ class OrderItem(Base):
 # META   "language_group": "synapse_pyspark"
 # META }
 
+# MARKDOWN ********************
+
+# ## Functions to connect to Azure SQL Database and create necessary tables 
+
 # CELL ********************
 
-# %pip install pyodbc  # Uncomment if not already installed
+# %pip install pyodbc  # Uncomment and run this line if pyodbc is not already installed
 
-import pyodbc
-import time
-#from config import Config  # Ensure Config.py exists in the same notebook folder or sys.path
+import pyodbc  # Library for connecting to SQL Server using ODBC
+import time    # Standard library for sleep functionality
+
+# from config import Config  # Uncomment if using an external configuration file for settings
 
 def create_connection():
+    # Define the connection string for a local SQL Server (commented out)
     # connection_string_local = (
     #     "DRIVER={ODBC Driver 18 for SQL Server};"
     #     "SERVER=localhost;"
     #     "DATABASE=test;"
     #     "Trusted_Connection=yes;"
     # )
+
+    # Define the connection string for Azure SQL Database
     connection_string_net = (
         "DRIVER={ODBC Driver 18 for SQL Server};"
         "SERVER=dataandai-celestial.database.windows.net;"
         "DATABASE=Test_Azure_SQL_DB_CDC;"
-        "UID=celestial-sa;"
-        "PWD=srGnyE%g8(95;"
+        "UID=celestial-sa;"  # Username for SQL authentication
+        "PWD=srGnyE%g8(95;"  # Password for SQL authentication
     )
-    connection = None
+
+    connection = None  # Initialize connection variable
+
+    # Try to connect up to 5 times
     for attempt in range(5):
         try:
+            # Use local or Azure SQL connection based on configuration
             if Config.SQL_SERVER_LOCAL:
                 connection = pyodbc.connect(connection_string_local)
-            else:   
+            else:
                 connection = pyodbc.connect(connection_string_net)
             print("Connection established successfully.")
-            break
+            break  # Exit loop if successful
         except pyodbc.Error as e:
             print(f"Attempt {attempt + 1}: Failed to connect. Error: {e}")
             if attempt < 4:
                 print("Retrying in 5 seconds...")
-                time.sleep(5)
+                time.sleep(5)  # Wait before retrying
     else:
-        raise Exception("Database connection failed after 5 attempts.")
-    return connection
+        raise Exception("Database connection failed after 5 attempts.")  # Raise error if all attempts fail
+
+    return connection  # Return established connection
+
 
 def close_connection(connection):
     if connection:
-        connection.close()
+        connection.close()  # Close database connection safely
+
 
 def create_tables(connection):
-    cursor = connection.cursor()
+    cursor = connection.cursor()  # Create a cursor object to execute SQL commands
 
+    # Create 'productcategories' table if it doesn't exist
     cursor.execute("""
         IF OBJECT_ID('productcategories', 'U') IS NULL
         CREATE TABLE [dbo].[productcategories](
@@ -212,6 +239,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'products' table
     cursor.execute("""
         IF OBJECT_ID('products', 'U') IS NULL
         CREATE TABLE [dbo].[products](
@@ -228,6 +256,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'customers' table
     cursor.execute("""
         IF OBJECT_ID('customers', 'U') IS NULL
         CREATE TABLE [dbo].[customers](
@@ -246,6 +275,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'orders' table
     cursor.execute("""
         IF OBJECT_ID('orders', 'U') IS NULL
         CREATE TABLE [dbo].[orders](
@@ -260,6 +290,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'orderItems' table
     cursor.execute("""
         IF OBJECT_ID('orderItems', 'U') IS NULL
         CREATE TABLE [dbo].[orderItems](
@@ -275,16 +306,18 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'orderPayments' table
     cursor.execute("""
-         IF OBJECT_ID('orderPayments', 'U') IS NULL
+        IF OBJECT_ID('orderPayments', 'U') IS NULL
         CREATE TABLE orderPayments (
-    orderId BIGINT NOT NULL FOREIGN KEY REFERENCES Orders(id),
-    paymentDate DATE,
-    channel NVARCHAR(50),
-    amount FLOAT
+            orderId BIGINT NOT NULL FOREIGN KEY REFERENCES Orders(id),
+            paymentDate DATE,
+            channel NVARCHAR(50),
+            amount FLOAT
         )
     """)
 
+    # Create 'warehouses' table
     cursor.execute("""
         IF OBJECT_ID('warehouses', 'U') IS NULL
         CREATE TABLE [dbo].[warehouses](
@@ -294,6 +327,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'inventory' table
     cursor.execute("""
         IF OBJECT_ID('inventory', 'U') IS NULL
         CREATE TABLE [dbo].[inventory](
@@ -306,6 +340,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'suppliers' table
     cursor.execute("""
         IF OBJECT_ID('suppliers', 'U') IS NULL
         CREATE TABLE suppliers (
@@ -320,6 +355,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'purchaseOrders' table
     cursor.execute("""
         IF OBJECT_ID('purchaseOrders', 'U') IS NULL
         CREATE TABLE [dbo].[purchaseOrders](
@@ -344,6 +380,7 @@ def create_tables(connection):
         )
     """)
 
+    # Create 'purchaseOrderItems' table
     cursor.execute("""
         IF OBJECT_ID('purchaseOrderItems', 'U') IS NULL
         CREATE TABLE [dbo].[purchaseOrderItems](
@@ -359,9 +396,9 @@ def create_tables(connection):
         )
     """)
 
-    connection.commit()
-    cursor.close()
-    print("Tables created successfully.")
+    connection.commit()  # Save all changes to the database
+    cursor.close()       # Close the cursor object
+    print("Tables created successfully.")  # Inform user of success
 
 
 # METADATA ********************
@@ -374,86 +411,6 @@ def create_tables(connection):
 # MARKDOWN ********************
 
 # ### Write the sprak script to read the data from Data_LH lake house files section (products, productcategories CSV files) and insert into products, productcategories tables of Test_Azure_SQL_DB_CDC database.
-
-# CELL ********************
-
-    # from pyspark.sql import SparkSession
-    # import pandas as pd  # ✅ Add this import
-
-    # # Check if data already exists
-    # # product_count = get_record_count(table_name="products")
-    # # if product_count > 0:
-    # #     return product_count
-    # print("Enter into Products Insertion menthod")
-    # spark = SparkSession.builder.getOrCreate()
-
-    # # Read CSV with better options to handle quotes and misaligned rows
-    # products_df = spark.read.option("header", True)\
-    #                         .option("multiLine", True)\
-    #                         .option("quote", '"')\
-    #                         .option("escape", '"')\
-    #                         .csv("Files/products.csv")
-
-    # #products_pd = products_df.toPandas()
-    # products_pd = products_df.limit(10).toPandas()
-    # print("products_pd:", products_pd.count())
-
-    # # Drop unwanted columns
-    # columns_to_drop = ['isBestSeller', 'boughtInLastMonth']
-    # products_pd = products_pd.drop(columns=[col for col in columns_to_drop if col in products_pd.columns])
-    # print("products_pd After drop columns:", products_pd.count())
-
-    # # Convert numeric fields safely
-    # numeric_columns = ['price', 'rating', 'listPrice']
-    # for col in numeric_columns:
-    #     if col in products_pd.columns:
-    #         products_pd[col] = pd.to_numeric(products_pd[col], errors='coerce')
-
-    # # Convert category_id to int (if needed by DB)
-    # if 'category_id' in products_pd.columns:
-    #     products_pd['category_id'] = pd.to_numeric(products_pd['category_id'], errors='coerce')
-
-    # # Drop rows where required numeric conversions failed
-    # products_pd = products_pd.dropna(subset=['price', 'category_id'])
-    # products_pd['category_id'] = products_pd['category_id'].astype(int)
-
-    # # Optional: fill NaNs in other float columns if needed
-    # products_pd = products_pd.fillna({'listPrice': 0.0, 'rating': 0.0})
-
-    # # Insert into SQL Server
-    # connection = create_connection()
-    # cursor = connection.cursor()
-    # print("Enter Into Cursor")
-    # columns = products_pd.columns.tolist()
-    # placeholders = ", ".join(["?"] * len(columns))
-    # column_names = ", ".join(columns)
-
-    # insert_query = f"INSERT INTO products ({column_names}) VALUES ({placeholders})"
-    # print("insert_query:", insert_query)
-    # success_count = 0
-    # for index, row in products_pd.iterrows():
-    #     try:
-    #         cursor.execute(insert_query, tuple(row))
-    #         success_count += 1
-    #         print("success_count:", success_count)
-    #     except Exception as e:
-    #         print(f"\n❌ Insert failed at row {index}")
-    #         print("Row data:", row.to_dict())
-    #         print("Data types:", row.map(type).to_dict())
-    #         print("Error:", e)
-    #         continue  # Skip bad rows
-
-    # connection.commit()
-    # cursor.close()
-    # connection.close()
-    
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -492,44 +449,6 @@ def seed_productcategories():
     connection.close()
 
     return len(categories_pd)
-
-
-# def seed_products():
-#     #from db import create_connection
-#     from pyspark.sql import SparkSession
-
-#     # Check if data already exists
-#     product_count = get_record_count(table_name="products")
-#     if product_count > 0:
-#         return product_count  # Already seeded
-
-#     # Spark session
-#     spark = SparkSession.builder.getOrCreate()
-
-#     # Read CSV from Lakehouse Files
-#     products_df = spark.read.option("header", True).csv("Files/products.csv")
-#     products_pd = products_df.toPandas()
-
-#     # Insert into DB
-#     connection = create_connection()
-#     cursor = connection.cursor()
-
-#     columns = products_pd.columns.tolist()
-#     placeholders = ", ".join(["?"] * len(columns))
-#     column_names = ", ".join(columns)
-
-#     insert_query = f"INSERT INTO products ({column_names}) VALUES ({placeholders})"
-
-#     for _, row in products_pd.iterrows():
-#         cursor.execute(insert_query, tuple(row))
-
-#     connection.commit()
-#     cursor.close()
-#     connection.close()
-
-#     return len(products_pd)
-
-
 
 def seed_products():
     from pyspark.sql import SparkSession
@@ -604,74 +523,16 @@ def seed_products():
 
 
 
-
-# def seed_products():
-#     from pyspark.sql import SparkSession
-#     import pandas as pd
-
-#     # Check if data already exists
-#     product_count = get_record_count(table_name="products")
-#     if product_count > 0:
-#         return product_count  # Already seeded
-
-#     # Spark session
-#     spark = SparkSession.builder.getOrCreate()
-
-#     # Read CSV from Lakehouse Files
-#     products_df = spark.read.option("header", True).csv("Files/products.csv")
-#     products_pd = products_df.toPandas()
-
-#     # Explicit type conversions
-#     products_pd["stars"] = pd.to_numeric(products_pd["stars"], errors="coerce")
-#     products_pd["price"] = pd.to_numeric(products_pd["price"], errors="coerce")
-    # products_pd["listPrice"] = pd.to_numeric(products_pd["listPrice"], errors="coerce")
-    # products_pd["category_id"] = pd.to_numeric(products_pd["category_id"], errors="coerce")
-    # products_pd["boughtInLastMonth"] = pd.to_numeric(products_pd["boughtInLastMonth"], errors="coerce")
-
-    # # Convert 'isBestSeller' to 0/1
-    # #\products_pd["isBestSeller"] = (
-    #     products_pd["isBestSeller"]
-    #     .astype(str)
-    #     .str.strip()
-    #     .str.lower()
-    #     .map({"true": 1, "false": 0, "1": 1, "0": 0})
-    #     .fillna(0)
-    # #     .astype(int)
-    # # )
-
-    # # Optional: Drop rows with missing critical values
-    # products_pd = products_pd.dropna(subset=[
-    #     "asin", "title", "imgUrl", "productURL", "stars", "reviews",
-    #     "price", "listPrice", "category_id"
-    # ])
-
-    # # Insert into DB
-    # connection = create_connection()
-    # cursor = connection.cursor()
-
-    # columns = products_pd.columns.tolist()
-    # placeholders = ", ".join(["?"] * len(columns))
-    # column_names = ", ".join(columns)
-
-    # insert_query = f"INSERT INTO products ({column_names}) VALUES ({placeholders})"
-
-    # for _, row in products_pd.iterrows():
-    #     cursor.execute(insert_query, tuple(row))
-
-    # connection.commit()
-    # cursor.close()
-    # connection.close()
-
-    # return len(products_pd)
-
-
-
 # METADATA ********************
 
 # META {
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
+# MARKDOWN ********************
+
+# ## Generate and seed realistic test data including inventory, suppliers, warehouses, payments, and purchase orders using Faker/Mimesis with locale-based support based on sales and inventory insights
 
 # CELL ********************
 
@@ -687,11 +548,34 @@ from faker import Faker
 import random
 #from config import Config
 
-fake = Faker()
+# Regions = { 
+#   "Asia": ['hi_IN', 'zh_CN', 'ja_JP', 'ko_KR', 'th_TH', 'ru_RU'],
+#   "Middle East": ['ar_AA', 'ar_EG', 'ar_JO', 'ar_PS', 'ar_SA'],
+#   "Europe": ['da_DK', 'de_AT', 'de_CH', 'de_DE', 'dk_DK', 'el_GR', 'es_ES', 'fr_BE', 'fr_CA', 'fr_CH','fr_FR', 'fr_QC', 'it_CH', 'it_IT', 'nl_BE', 'nl_NL', 'no_NO', 'pl_PL', 'pt_PT', 'ro_RO', 'sk_SK', 'sl_SI', 'sv_SE'],
+#   "LatAm": ['es_AR', 'es_BO', 'es_CL', 'es_CO', 'es_CR', 'es_DO', 'es_EC', 'es_ES'],
+#   "Africa": ['ar_AA', 'ar_EG', 'ar_JO', 'ar_PS', 'ar_SA', 'tw_GH'],
+#   "East Asia": ['zh_CN', 'zh_TW', 'ja_JP', 'ko_KR', 'th_TH'],
+#   "East Europe": ['bg_BG', 'cs_CZ', 'uk_UA', 'ru_RU', 'ro_RO', 'pl_PL', 'sk_SK', 'sl_SI']
+# }
 
-# function to show all locales in Faker
 
+# Define supported regions and locales for Faker data
+Regions = {
+    "Asia": ['hi_IN', 'zh_CN', 'ja_JP', 'ko_KR', 'th_TH'],
+    "Middle East": ['ar_EG', 'ar_SA'],
+    "Europe": ['de_DE', 'en_GB', 'es_ES', 'fr_FR', 'it_IT', 'nl_NL', 'pl_PL', 'pt_PT', 'ro_RO', 'ru_RU'],
+    "LatAm": ['es_CO', 'es_MX', 'es_ES'],  #  Removed es_BO and others not supported
+    "Africa": ['en_ZA', 'fr_FR'],  # limited support
+    "East Asia": ['zh_CN', 'ja_JP', 'ko_KR'],
+    "East Europe": ['cs_CZ', 'pl_PL', 'ro_RO', 'ru_RU', 'uk_UA']
+}
+# Create Faker instance based on region in Config, or use default if not defined
+if not Config.Region:
+    fake = Faker()
+else:
+    fake = Faker(Regions[Config.Region])
 
+# List of all possible locales supported by Faker
 faker_locales = [
         'ar_AA', 'ar_EG', 'ar_JO', 'ar_PS', 'ar_SA', 'bg_BG', 'bs_BA', 'cs_CZ', 'da_DK', 'de_AT', 
         'de_CH', 'de_DE', 'dk_DK', 'el_CY', 'el_GR', 'en_AU', 'en_CA', 'en_GB', 'en_IE', 'en_IN', 
@@ -704,6 +588,7 @@ faker_locales = [
         'sq_AL', 'sv_SE', 'ta_IN', 'th_TH', 'tr_TR', 'tw_GH', 'uk_UA', 'vi_VN', 'zh_CN', 'zh_TW'
     ]
 
+# Function to print sample data for random locales
 def test_faker_locales():
     """Test function to show all Faker locales."""
     print("Available Faker locales:")
@@ -730,7 +615,7 @@ def test_faker_locales():
         
     return
 
-
+# Function to show sample data from all Mimesis locales
 def test_mimesis():
     """Test function to show all Mimesis locales."""
     from mimesis import Generic
@@ -756,6 +641,7 @@ def test_mimesis():
             print(f"Warning for locale {locale}: {e}")
     return
 
+# Function to show specific Faker locale sample data
 def show_faker_locale(locale):
     """Show Faker locale details."""
     if locale in faker_locales:
@@ -786,7 +672,7 @@ def show_faker_locale(locale):
     return
 
 
-
+# Global variable to cache product list
 all_products = []
 def cache_all_products():
     global all_products
@@ -795,7 +681,7 @@ def cache_all_products():
         if Config.inStockOnly:
             query += " WHERE listPrice > 0"
         all_products = executeSQL(query)
-
+# List of major banks
 banks = ["JPMorgan Chase Bank", "Bank of America", "Wells Fargo Bank", "Citibank", "U.S. Bank", "PNC Bank", 
          "Goldman Sachs Bank", "Truist Bank", "Capital One Bank", "TD Bank", "Bank of New York Mellon", 
          "USAA Bank", "Charles Schwab Bank", "American Express Bank", "HSBC Bank USA", "Fifth Third Bank", 
@@ -807,7 +693,7 @@ banks = ["JPMorgan Chase Bank", "Bank of America", "Wells Fargo Bank", "Citibank
          "Bank of Nova Scotia", "Bank of Montreal", "Canadian Imperial Bank of Commerce", "National Bank of Canada", 
          "Desjardins Bank", "Laurentian Bank of Canada", "Canadian Western Bank", "Banco Nacional de Mexico"]
 
-
+# Function to generate ZIP code based on U.S. state abbreviation
 def zipcode_for_state(state_abbr):
     state_zip_ranges = {
     "AL": (35004, 36925),
@@ -872,8 +758,8 @@ def zipcode_for_state(state_abbr):
         start, end = state_zip_ranges[state_abbr]
         return f"{random.randint(start, end):05d}"
     else:
-        return fake.zipcode()
-    
+        return fake.postcode()
+# Area codes mapped to U.S. states  
 state_area_codes = {
     "AL": [205, 251, 256, 334, 938],
     "AK": [907],
@@ -932,21 +818,16 @@ state_area_codes = {
     "PR": [787, 939],
     "VI": [340],
 }
-def executeSQL(strSQL):
-    connection = create_connection()
-    cursor = connection.cursor()
-    cursor.execute(strSQL)
-    result = cursor.fetchall()
-    cursor.close()
-    close_connection(connection)
-    return result
 
+# Returns a random area code for a given US state or random 3-digit if unknown
 def phone_prefix_for_state(state_abbr):
     codes = state_area_codes.get(state_abbr)
     if codes:
         return str(random.choice(codes))
     else:
         return str(random.randint(200, 999)) 
+
+# Seeds fake customer records into the database in batches
 def seed_customers(count=10000, batch_size=200):
     # Find the current max customer ID before insertion
     initial_max_ID = executeSQL("SELECT ISNULL(MAX(id), 0) FROM customers")[0][0]
@@ -957,6 +838,7 @@ def seed_customers(count=10000, batch_size=200):
     cursor = connection.cursor()
     with connection:
         while inserted < count:
+            # Prepare a batch of new fake customers
             batch = []
             for _ in range(min(batch_size, count - inserted)):
                 c = generate_new_customer()
@@ -976,6 +858,7 @@ def seed_customers(count=10000, batch_size=200):
                     c["state"][:2],
                     c["zip"][:10]
                 ))
+             # Insert batch into the database
             cursor.executemany(
                 """INSERT INTO customers (firstName, middleName, lastName, company, DOB, email, phone, address, city, state, zip) 
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -985,7 +868,7 @@ def seed_customers(count=10000, batch_size=200):
             inserted += len(batch)
             print(f"Inserted {inserted} customers...")
             
-    # Get all IDs greater than initial_max_ID using the same cursor/connection
+    # Fetch IDs of newly inserted customers
     rows = cursor.execute("SELECT id FROM customers WHERE id > ?", (initial_max_ID,)).fetchall()
     new_ids = [row[0] for row in rows]
     cursor.close()
@@ -993,6 +876,7 @@ def seed_customers(count=10000, batch_size=200):
     print(f"Seeded {count} customers.")
     return new_ids
 
+# Get list of unpaid orders with optional date filter
 def get_unpaid_orders(get_first_row = False, date=None):
     if not date:
         date_filter = ""
@@ -1014,15 +898,16 @@ def get_unpaid_orders(get_first_row = False, date=None):
         order by o.orderDate"""
     result = executeSQL(strSQL)
     
-    # Convert to list of dictionaries for easier access
+    # Return list of unpaid orders as dictionaries
     return [{"id": row[0], "orderDate": row[1], "diff": row[2]} for row in result]
 
+# Generates one fake customer dictionary with name, address, phone, etc.
 def generate_new_customer():
     email = fake.email(safe=False).split('@')[0] + '@' + fake.domain_name(levels=random.randint(1, 2)) 
     fname = fake.first_name()
 
+    # Assign gender-based names randomly
     is_female = True if random.randint(1, 100) <= 52 else False
-
     # 52% chance of having female first name, 48% chance of having male
     if is_female:
         # 52% chance of having a middle name
@@ -1031,7 +916,7 @@ def generate_new_customer():
         # 48% chance of having a middle name
         fname = fake.first_name_male()
 
-
+    # Random chance to assign or omit middle name
     if random.randint(0, 3) == 0:
         # 25% chance of no middle name
         mname = ""
@@ -1056,7 +941,7 @@ def generate_new_customer():
     prefix = phone_prefix_for_state(state)
     phone = f"({prefix}){random.randint(100,999)}-{random.randint(1000,9999)}"
     
-
+    # Return customer as dictionary
     return {"firstName": fname, 
             "middleName": mname, 
             "lastName": lname, 
@@ -1069,8 +954,17 @@ def generate_new_customer():
             "state": state,
             "zip": zip_code}
 
+# Executes a given SQL query and returns all results
+def executeSQL(strSQL):
+    connection = create_connection()
+    cursor = connection.cursor()
+    cursor.execute(strSQL)
+    result = cursor.fetchall()
+    cursor.close()
+    close_connection(connection)
+    return result
 
-
+# Returns a random list of product IDs and quantities for an order
 def products_for_order(productsCount=2, productQuantityLimit=2):
     cache_all_products()
     selected = random.sample(all_products, random.randint(1, min(productsCount, len(all_products))))
@@ -1080,11 +974,12 @@ def products_for_order(productsCount=2, productQuantityLimit=2):
     ]
     return result
 
+# Generates a new order dict with customer_id and list of product items
 def generate_order(customer_id=0, productsCount=2, productQuantityLimit=5):
     products = products_for_order(productsCount=productsCount, productQuantityLimit=productQuantityLimit)
     return {"customer_id": customer_id, "products": products}
 
-
+# Seeds multiple orders for both existing and newly generated customers
 def seed_orders(customerCount=1000, newCustomersPercentage=Config.CUSTOMERS_PER_DAY_VARIATION_PERCENTAGE, inStockOnly=True, productsCount=2, productQuantityLimit=3, maxOrderCountPerCustomer=3):
     probability_of_multiple_orders = 0.1
     customers = customers_list_for_orders(customerCount, newCustomersPercentage)
@@ -1092,6 +987,7 @@ def seed_orders(customerCount=1000, newCustomersPercentage=Config.CUSTOMERS_PER_
     for customer_id in customers:
         orderCount = 0
         while True:
+            # Generate one order for the customer
             order = generate_order(customer_id=customer_id, productsCount=2, productQuantityLimit=3)
             orders.append(order)
             orderCount += 1
@@ -1105,6 +1001,7 @@ def seed_orders(customerCount=1000, newCustomersPercentage=Config.CUSTOMERS_PER_
     print(f"Seeded {len(orders)} orders.")
     return orders   
 
+# Inserts orders and corresponding order items into the database
 def insert_orders(orders):
     connection = create_connection()
     cursor = connection.cursor()
@@ -1132,7 +1029,7 @@ def insert_orders(orders):
         all_order_data.append(order_data)
         doc_order_id += 1
     
-    # Process orders in batches of 100
+    # Orders inserted in batches
     batch_size = 200
     all_order_ids = []
     
@@ -1194,6 +1091,7 @@ def insert_orders(orders):
     close_connection(connection)
     return all_order_ids
 
+# Returns the min and max order ID (optionally filtered by date)
 def get_last_order_id(by_date=True):
     if by_date:
         result = executeSQL(f"SELECT MIN(id), MAX(id) FROM orders where orderDate = '{Config.ORDER_GENERATION_DATE}'")
@@ -1204,6 +1102,7 @@ def get_last_order_id(by_date=True):
         return result[0][0], result[0][1]
     return 0, 0
 
+# Returns a list of existing and optionally new customer IDs for order seeding
 def customers_list_for_orders(customerCount=10, newPercentage=10):
     customers = executeSQL("SELECT id FROM customers")
     customers_count = min(customerCount, len(customers)) 
@@ -1223,6 +1122,7 @@ def customers_list_for_orders(customerCount=10, newPercentage=10):
         print("No new customers generated.")
     return [customer[0] for customer in selected_customers]
 
+# Triggers payment generation for unpaid orders
 def seed_payments(): # not ready yet
     unpaid_orders = get_unpaid_orders(get_first_row=True)
     min_date = unpaid_orders[0]["orderDate"] if unpaid_orders else datetime.date.today()
@@ -1232,7 +1132,7 @@ def seed_payments(): # not ready yet
         generate_and_insert_payments(date_from = min_date, date_to = datetime.date.today())
     return True
 
-
+# Simulates payment insertion for unpaid orders between two dates
 def generate_and_insert_payments(date_from, date_to):
     paid_percentage = 0.95  # 95% of orders will be paid
     current_date = date_from
@@ -1247,83 +1147,112 @@ def generate_and_insert_payments(date_from, date_to):
     insert_payments(orders, date_to)
     return True
 
-
+# Returns total count of rows in a table with optional filter
 def get_record_count(table_name, filter="1 = 1"):
     result = executeSQL(f"SELECT COUNT(*) FROM {table_name} WHERE {filter}")
     if result and result[0][0] is not None:
         return result[0][0]
     return 0
 
+# Returns all records from a table with optional fields and filters
 def get_records(table_name, fields = "*", filter="1 = 1"):
     result = executeSQL(f"SELECT {fields} FROM {table_name} WHERE {filter}")
     return result
 
+#function for inventory
 def seed_inventory():
-    #stock_products = executeSQL("select p.id from products p left join inventory i on p.id = i.productId where i.id is null and p.listPrice > 0 ")
-    stock_products = executeSQL("    SELECT TOP 1000 p.id from products p left join inventory i on p.id = i.productId where i.id is null and p.listPrice > 0 ")
+    # Query products that are not already in the inventory and have listPrice > 0
+    stock_products = executeSQL("select p.id from products p left join inventory i on p.id = i.productId where i.id is null and p.listPrice > 0 ")
+    
+    # Get list of warehouse IDs
     warehouses = get_records(table_name="warehouses", fields="id")
+    
+    # Count how many inventory records already exist
     inventory_count = get_record_count(table_name="inventory")
+    
+    # If there are no such products, skip the seeding process
     if not stock_products:
         print("No products with stock found. Skipping inventory seeding.")
         return False
     else:
         print(f"Found {len(stock_products)} products with stock. Seeding inventory...")
+        
+        # Open DB connection and cursor
         connection = create_connection()
         cursor = connection.cursor()
         batch = []
+
+        # For each product, generate inventory data and prepare for batch insert
         for product in stock_products:
             inventory_count += 1
-            warehouse = random.sample(warehouses, 1)[0]  # Get one random warehouse
+            warehouse = random.sample(warehouses, 1)[0]  # Select one random warehouse
             batch.append((
-                product[0],  # product_id
-                warehouse[0],  # warehouse_id (first column of the tuple)
-                random.randint(5, 1000),  # stock_quantity
-                0  # min_qty
-                ))
+                product[0],          # productId
+                warehouse[0],        # warehouseId
+                random.randint(5, 1000),  # Quantity between 5 and 1000
+                0                    # Minimum quantity
+            ))
+
+            # Insert batch when it reaches configured size
             if len(batch) >= Config.DEFAULT_BATCH_SIZE:
                 cursor.executemany(
                     """INSERT INTO inventory (productId, warehouseId, qty, min_qty) 
                         VALUES (?, ?, ?, ?)""",
                     batch
                 )
-                connection.commit()  # Commit the batch insert
+                connection.commit()  # Commit after each batch insert
                 print(f"Inserted batch of {len(batch)} inventory records.")
-                batch = []  # Clear the batch after inserting
+                batch = []  # Reset batch
+        
+        # Insert any remaining records in the final batch
         if len(batch)>0:
-                cursor.executemany(
-                    """INSERT INTO inventory (productId, warehouseId, qty, min_qty) 
-                        VALUES (?, ?, ?, ?)""",
-                    batch
-                )
-                connection.commit()  # Commit the batch insert
-                print(f"Inserted final batch of {len(batch)} inventory records.")
+            cursor.executemany(
+                """INSERT INTO inventory (productId, warehouseId, qty, min_qty) 
+                    VALUES (?, ?, ?, ?)""",
+                batch
+            )
+            connection.commit()
+            print(f"Inserted final batch of {len(batch)} inventory records.")
+        
+        # Close DB resources
         cursor.close()
         connection.close()
+    
     return inventory_count
 
 
 
+#Function for suppliers
 def seed_suppliers():
+    # Count current suppliers
     supplier_count = get_record_count(table_name="suppliers")
+    
+    # Skip seeding if suppliers already exist
     if supplier_count > 0:
-        return supplier_count  # Already seeded
+        return supplier_count
+
+    # Open DB connection
     connection = create_connection()
     cursor = connection.cursor()
     batch = []
+
+    # Generate new suppliers
     for _ in range(1, Config.SUPPLIERS_TO_CREATE):
         supplier_count += 1
-        contact = generate_new_customer()
-        batch.append(
-            (
-                contact["company"],
-                contact["address"] + "/n" + contact["city"] + "/n" + contact["state"] + "/n" + contact["zip"] ,
-                contact["firstName"] + (" " + contact["middleName"] if contact["middleName"] else "") + " " + contact["lastName"],
-                contact["phone"],
-                contact["email"],
-                random.choice(banks),
-                fake.iban()
-            )
-        )
+        contact = generate_new_customer()  # Use fake customer as supplier contact
+
+        # Prepare supplier data
+        batch.append((
+            contact["company"],
+            contact["address"] + "/n" + contact["city"] + "/n" + contact["state"] + "/n" + contact["zip"],
+            contact["firstName"] + (" " + contact["middleName"] if contact["middleName"] else "") + " " + contact["lastName"],
+            contact["phone"],
+            contact["email"],
+            random.choice(banks),
+            fake.iban()
+        ))
+
+        # Perform batch MERGE insert when batch size is reached
         if len(batch) >= Config.DEFAULT_BATCH_SIZE:
             cursor.executemany(
                 """MERGE suppliers AS target
@@ -1335,7 +1264,9 @@ def seed_suppliers():
                 batch
             )
             connection.commit()
-            batch = []  # Clear the batch after inserting   
+            batch = []  # Clear batch
+    
+    # Insert remaining batch
     if len(batch)>0:
         cursor.executemany(
             """MERGE suppliers AS target
@@ -1347,45 +1278,64 @@ def seed_suppliers():
             batch
         )
 
+    # Final commit and cleanup
     connection.commit()
     cursor.close()
     connection.close()
     
     return supplier_count
 
+
+#Function for  warehouse table
 def seed_warehouses():
+    # Check how many warehouses already exist
     warehouse_count = get_record_count(table_name="warehouses")
+    
+    # Skip if already seeded
     if warehouse_count > 0:
-        return warehouse_count  # Already seeded
-    # Now process order items with the actual IDs
+        print(f"{warehouse_count} warehouses already exist. Skipping.")
+        return warehouse_count
+
+    # Open DB connection
     connecion = create_connection()
     cursor = connecion.cursor()
     batch = []
-    for _ in range(1,random.randint(1,5)):        
-        warehouse_count += 1
-        batch.append(
-            (
-                fake.first_name(),
-                fake.address()
-            )
+
+    # Generate between 1 and 5 fake warehouses
+    num_warehouses = random.randint(1, 5)
+    for _ in range(num_warehouses):
+        batch.append((
+            fake.first_name() + " Warehouse",  # Random warehouse name
+            fake.address()  # Random address
+        ))
+
+    # Insert batch if any data generated
+    if batch:
+        cursor.executemany(
+            """INSERT INTO warehouses (warehouseName, address) VALUES (?, ?)""",
+            batch
         )
-    cursor.executemany(
-                """INSERT INTO warehouses (warehouseName, address) 
-                    VALUES (?, ?)""",
-                batch
-            )
-    connecion.commit()
+        connecion.commit()
+        print(f"Inserted {len(batch)} warehouses.")
+    else:
+        print("No warehouses generated. Skipping insert.")
+
     cursor.close()
     connecion.close()
-    
-    return warehouse_count
+
+    return len(batch)
 
 
 
+
+# function for insert payment
 def insert_payments(orders_to_pay, payment_date):
+    # Open DB connection
     connection = create_connection()
     cursor = connection.cursor()
     batch = []
+
+    # Generate payment record for each order
     for order in orders_to_pay:
         batch.append((
                 order["id"],
@@ -1393,6 +1343,7 @@ def insert_payments(orders_to_pay, payment_date):
                 fake.random_element(elements=("Online", "In-Store", "Mobile", "Credit Card")),
                 round(order["diff"], 2)
                 ))
+        # Batch insert once threshold is reached
         if len(batch) >= Config.DEFAULT_BATCH_SIZE:
             cursor.executemany(
                 """INSERT INTO orderPayments (orderId, paymentDate, channel, amount) 
@@ -1401,6 +1352,7 @@ def insert_payments(orders_to_pay, payment_date):
             )
             batch = []  # Clear the batch after inserting
             connection.commit()
+    # Insert remaining batch
     if batch:
         cursor.executemany(
             """INSERT INTO orderPayments (orderId, paymentDate, channel, amount) 
@@ -1409,14 +1361,15 @@ def insert_payments(orders_to_pay, payment_date):
         )
     # Commit any remaining transactions
     connection.commit()
-    cursor.close()
+    curor.close()
     print(f"Seeded {len(orders_to_pay)} transactions.")
 
     close_connection(connection)
 
     return True
 
-def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
+#function for purchase orders
+def seed_purchase_orders(po_count=100000, days_back=720, product_filter="All Sold"):
     """
     Generate purchase orders based on products that appear in orderItems (sold products)
     
@@ -1425,6 +1378,7 @@ def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
         days_back: Number of days back from today to generate POs
         product_filter: "All Sold" (uses orderItems), "Top Selling", or "Recent Sales"
     """
+    # Ensure suppliers and warehouses are seeded
     supplier_count = get_record_count(table_name="suppliers")
     if supplier_count == 0:
         print("No suppliers found. Please seed suppliers first.")
@@ -1500,13 +1454,14 @@ def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
         return 0
     
     products = executeSQL(product_query)
-    
+    # Execute the product query to get sales-driven product data
     if not products:
         print(f"No products found in orderItems for filter '{product_filter}'. Please ensure orders have been seeded.")
         return 0
     
     print(f"Found {len(products)} sold products for PO generation with filter '{product_filter}'")
-    
+   
+    # Get supplier and warehouse records for linking POs
     suppliers = get_records(table_name="suppliers", fields="id, companyName")
     warehouses = get_records(table_name="warehouses", fields="id, warehouseName")
     
@@ -1696,6 +1651,7 @@ def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
                 po_id = po_ids[po_idx]
                 po_status = po_data[10]  # status field
                 
+                # Prepare and flatten PO headers
                 for item in po_items:
                     # Calculate received quantity based on status
                     if po_status == "Received":
@@ -1711,7 +1667,7 @@ def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
                         f"Sold: {item['total_sold']}, Monthly demand: {item['monthly_demand']}, Stock: {item['current_inventory']}"
                     ))
         
-        # Insert PO items in sub-batches of 200 if needed
+        # Prepare and insert PO items
         if all_po_items_batch:
             item_batch_size = 500
             for j in range(0, len(all_po_items_batch), item_batch_size):
@@ -1725,7 +1681,7 @@ def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
         connection.commit()
         inserted_pos += len(po_header_batch)
         print(f"Inserted {inserted_pos} purchase orders...")
-    
+    # Final cleanup
     cursor.close()
     close_connection(connection)
     print(f"Generated {po_generated} purchase orders based on orderItems using '{product_filter}' filter.")
@@ -1738,59 +1694,69 @@ def seed_purchase_orders(po_count=20, days_back=720, product_filter="All Sold"):
 # META   "language_group": "synapse_pyspark"
 # META }
 
+# MARKDOWN ********************
+
+# ## Main function
+
 # CELL ********************
 
 # filepath: mssql-demo-project/mssql-demo-project/src/main.py
-import datetime
-#import db
-#from seed import create_tables, seed_customers, seed_inventory, seed_orders, seed_payments, executeSQL, seed_warehouses, seed_suppliers, seed_purchase_orders, test_faker_locales, test_mimesis
-#from config import Config
-import random
+
+import datetime  # To work with dates and times
+#import db  # (Commented out) Placeholder for database utility module
+#from seed import ...  # (Commented out) All seeding functions and utilities
+#from config import Config  # (Commented out) Configuration class for parameters
+import random  # For generating random variations
 
 def main():
-    # Define the scenario for seeding
-    # This can be used to control which seeding functions to run
-    # possible values: "seed_products", "seed_customers", "seed_orders", "create_tables"
+    # Define the list of data generation steps to execute in order
+    # Prefixing an item with '!' means it's skipped (likely handled elsewhere)
     scenario = ["create_tables", 
-                "seed_products",
-                "seed_productcategories",
+                "!seed_products",
+                "!seed_productcategories",
                 "seed_customers",
                 "batch_seed_orders",
-                "!seed_orders", 
+                "seed_orders", 
                 "seed_payments",
                 "seed_warehouses",
                 "seed_inventory",
                 "seed_suppliers",
-                "seed_purchase_orders"] # switch '-' to '_' to be used in scenario
-    test_mode = Config.TEST_MODE  # Use the test mode setting from the config
+                "seed_purchase_orders"]
+    
+    # Fetch test mode setting from configuration
+    test_mode = Config.TEST_MODE
 
     try:
-        #test_faker_locales()
+        # Uncomment to test locale generation via Faker
+        # test_faker_locales()
 
-        # Check the scenario and call the appropriate seeding functions
+        # Create database schema/tables if specified in the scenario
         if "create_tables" in scenario:
             connection = create_connection()
             create_tables(connection)
 
+        # Seed product categories if specified
         if "seed_productcategories" in scenario:
             cnt = seed_productcategories()
             print(f"{cnt} product categories seeded successfully.")
 
+        # Seed product data if specified
         if "seed_products" in scenario:
             print(f"Enter Into products seeded.")
             cnt = seed_products()
             print(f"{cnt} products seeded successfully.")
-        if "seed_customers" in scenario:   
-            #check if customers table is empty before seeding            
+
+        # Seed customer data conditionally if customer count is insufficient
+        if "seed_customers" in scenario:
             if executeSQL("SELECT COUNT(*) FROM Customers")[0][0] is None \
-                or executeSQL("SELECT COUNT(*) FROM Customers")[0][0] <= Config.CUSTOMERS_TO_CREATE:                                
+                or executeSQL("SELECT COUNT(*) FROM Customers")[0][0] <= Config.CUSTOMERS_TO_CREATE:
                 if test_mode:
-                    seed_customers(int(Config.CUSTOMERS_TO_CREATE/100), Config.DEFAULT_BATCH_SIZE)
+                    seed_customers(int(Config.CUSTOMERS_TO_CREATE / 100), Config.DEFAULT_BATCH_SIZE)
                 else:
                     seed_customers(Config.CUSTOMERS_TO_CREATE, Config.DEFAULT_BATCH_SIZE)
-        
+
+        # Batch seed orders across multiple days based on date range
         if "batch_seed_orders" in scenario:
-            # Batch seed orders with a specific configuration
             last_order_date = executeSQL("SELECT MAX(OrderDate) FROM Orders")[0][0]
             print(last_order_date)
             if last_order_date is not None:
@@ -1798,49 +1764,89 @@ def main():
             
             dt = datetime.datetime.strptime(Config.ORDER_GENERATION_DATE, "%Y-%m-%d").date()
             iteration = 0
+
             while dt < datetime.datetime.now().date():
                 iteration += 1
-                seed_orders(Config.CUSTOMERS_PER_DAY + int(Config.CUSTOMERS_PER_DAY * Config.CUSTOMERS_PER_DAY_VARIATION_PERCENTAGE / 100 * 2 *(random.random()-0.5)) , # variation in batch size
-                            1, 
-                            True, 
-                            Config.MAX_PRODUCTS_PER_ORDER, 3, Config.MAX_ORDERS_PER_CUSTOMER) 
+                # Generate a variable number of customers per batch with slight randomness
+                seed_orders(
+                    Config.CUSTOMERS_PER_DAY + int(Config.CUSTOMERS_PER_DAY * Config.CUSTOMERS_PER_DAY_VARIATION_PERCENTAGE / 100 * 2 * (random.random() - 0.5)),
+                    1, 
+                    True, 
+                    Config.MAX_PRODUCTS_PER_ORDER,
+                    3, 
+                    Config.MAX_ORDERS_PER_CUSTOMER
+                )
                 dt = dt + datetime.timedelta(days=1)
                 Config.ORDER_GENERATION_DATE = dt.strftime("%Y-%m-%d")
+
+                # Stop after a few iterations if in test mode
                 if test_mode and iteration >= Config.ITERATIONS_IN_TEST_MODE:
                     break
 
+        # If batch seeding is skipped, run a single seeding of orders
         elif "seed_orders" in scenario:
-            seed_orders(100,
-                        10, 
-                        True, 
-                        Config.MAX_PRODUCTS_PER_ORDER, 3, Config.MAX_ORDERS_PER_CUSTOMER)
-            
+            seed_orders(
+                100,  # number of customers
+                10,   # number of days
+                True,  # generate sequentially
+                Config.MAX_PRODUCTS_PER_ORDER,
+                3,
+                Config.MAX_ORDERS_PER_CUSTOMER
+            )
+
+        # Seed payments for unpaid orders
         if "seed_payments" in scenario:
             seed_payments()
-        
+
+        # Seed warehouse data
         if "seed_warehouses" in scenario:
             cnt = seed_warehouses()
             print(f"{cnt} warehouses seeded successfully.")
 
+        # Seed inventory for products
         if "seed_inventory" in scenario:
-            cnt = seed_inventory()    
+            cnt = seed_inventory()
             print(f"{cnt} inventory records seeded successfully.")
 
+        # Seed supplier data
         if "seed_suppliers" in scenario:
-            cnt = seed_suppliers()   
-            print(f"{cnt} suppliers seeded successfully.") 
+            cnt = seed_suppliers()
+            print(f"{cnt} suppliers seeded successfully.")
 
+        # Seed purchase orders based on sales and inventory
         if "seed_purchase_orders" in scenario:
-            cnt = seed_purchase_orders(20,90)
+            cnt = seed_purchase_orders(20, 90)
             print(f"{cnt} purchase orders seeded successfully.")
-            
-        
+    
     finally:
+        # Always print completion message regardless of success/failure
         print("Process completed.")
         
 
+# Entry point check — only run main if this script is the entry point
 if __name__ == "__main__":
     main()
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
 
 # METADATA ********************
 
@@ -1863,9 +1869,7 @@ def drop_all_tables(connection):
         "orderPayments",
         "orderItems",
         "orders",
-        "customers",
-        "products",
-        "productCategories"
+        "customers"
     ]
     # tables_to_drop = [
   
