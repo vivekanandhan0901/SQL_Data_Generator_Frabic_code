@@ -175,7 +175,7 @@ class OrderItem(Base):
 
 # %pip install pyodbc  # Uncomment and run this line if pyodbc is not already installed
 
-import pyodbc  # Library for connecting to SQL Server using ODBC
+import pyodbc  # Library for connecting to SQL Server using ODBCsuccessful
 import time    # Standard library for sleep functionality
 
 # from config import Config  # Uncomment if using an external configuration file for settings
@@ -546,6 +546,7 @@ from faker import Faker
 #import config
 #from db import create_tables, create_connection, close_connection
 import random
+from pyspark.sql import SparkSession
 #from config import Config
 
 # Regions = { 
@@ -955,14 +956,33 @@ def generate_new_customer():
             "zip": zip_code}
 
 # Executes a given SQL query and returns all results
-def executeSQL(strSQL):
+def executeSQL(strSQL, fetch_results=False):
+    """
+    Executes a SQL statement and optionally fetches results.
+    
+    Args:
+        strSQL: SQL statement to execute
+        fetch_results: Whether to fetch results (True for SELECT, False for DDL/DML)
+    
+    Returns:
+        List of results for SELECT queries, None for non-query statements, or False on error
+    """
     connection = create_connection()
-    cursor = connection.cursor()
-    cursor.execute(strSQL)
-    result = cursor.fetchall()
-    cursor.close()
-    close_connection(connection)
-    return result
+    try:
+        cursor = connection.cursor()
+        cursor.execute(strSQL)
+        if fetch_results:
+            result = cursor.fetchall()
+        else:
+            result = None
+            connection.commit()  # Commit for non-query statements
+        cursor.close()
+        return result
+    except Exception as e:
+        print(f"Error executing SQL '{strSQL}': {str(e)}")
+        return False
+    finally:
+        close_connection(connection)
 
 # Returns a random list of product IDs and quantities for an order
 def products_for_order(productsCount=2, productQuantityLimit=2):
@@ -1160,7 +1180,7 @@ def get_records(table_name, fields = "*", filter="1 = 1"):
     return result
 
 #function for inventory
-def seed_inventory():
+def seed_inventory_ODBC():
     # Query products that are not already in the inventory and have listPrice > 0
     stock_products = executeSQL("select p.id from products p left join inventory i on p.id = i.productId where i.id is null and p.listPrice > 0 ")
     
@@ -1221,6 +1241,81 @@ def seed_inventory():
     return inventory_count
 
 
+#SPARK function for inventory
+def seed_inventory(spark: SparkSession, truncate: bool = False):
+    """
+    Seeds inventory data using PySpark for products not in inventory with listPrice > 0.
+    
+    Args:
+        spark: SparkSession object
+        batch_size: Number of records to process per batch (default: 1000)
+    
+    Returns:
+        int: Updated inventory record count
+    """
+    # JDBC connection properties
+    jdbc_url = "jdbc:sqlserver://dataandai-celestial.database.windows.net:1433;database=Test_Azure_SQL_DB_CDC"
+    connection_properties = {
+        "user": "celestial-sa",
+        "password": "srGnyE%g8(95",
+        "driver": "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    }
+
+    if truncate:
+        try:
+            executeSQL("truncate table inventory", fetch_results=False)
+        except Exception as e:
+            print(f"Error truncating inventory table: {str(e)}")
+            return -1
+
+    # Query products not in inventory with listPrice > 0
+    products_df = spark.read.jdbc(url=jdbc_url, table="dbo.products", properties=connection_properties).alias("products")
+    inventory_df = spark.read.jdbc(url=jdbc_url, table="dbo.inventory", properties=connection_properties).alias("inventory")
+
+    stock_products = (
+        products_df
+        .join(inventory_df, col("products.id") == col("inventory.productId"), "left_outer")
+        .where(col("inventory.id").isNull() & (col("products.listPrice") > 0))
+        .select(col("products.id"))
+    )
+    
+    # Get list of warehouse IDs
+    warehouses = spark.read.jdbc(url=jdbc_url, table="warehouses", properties=connection_properties).select("id").collect()
+    warehouse_ids = [row["id"] for row in warehouses]
+    
+    # Since table is truncated, inventory count starts at 0
+    inventory_count = 0
+    
+    # If no products found, skip seeding
+    if stock_products.count() == 0:
+        print("No products with stock found. Skipping inventory seeding.")
+        return False
+    else:
+        print(f"Found {stock_products.count()} products with stock. Seeding inventory...")
+        
+        # Convert products to list for processing
+        product_ids = [row["id"] for row in stock_products.collect()]
+        
+        # Prepare inventory data
+        inventory_data = []
+        for product_id in product_ids:
+            inventory_count += 1
+            warehouse_id = random.choice(warehouse_ids)  # Select random warehouse
+            inventory_data.append({
+                "productId": product_id,
+                "warehouseId": warehouse_id,
+                "qty": random.randint(5, 1000),  # Random quantity between 5 and 1000
+                "min_qty": 0
+            })
+        
+        # Insert any remaining records
+        if inventory_data:
+            batch_df = spark.createDataFrame(inventory_data,
+                                           schema=["productId", "warehouseId", "qty", "min_qty"])
+            batch_df.write.jdbc(url=jdbc_url, table="inventory", mode="append", properties=connection_properties)
+            print(f"Inserted final batch of {len(inventory_data)} inventory records.")
+        
+        return inventory_count
 
 #Function for suppliers
 def seed_suppliers():
@@ -1707,21 +1802,29 @@ import datetime  # To work with dates and times
 #from seed import ...  # (Commented out) All seeding functions and utilities
 #from config import Config  # (Commented out) Configuration class for parameters
 import random  # For generating random variations
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, rand
 
 def main():
+
+    seed_spark_session = SparkSession.builder \
+     .appName("DataSeeding") \
+     .config("spark.jars.packages", "com.microsoft.sqlserver:mssql-jdbc:9.4.1.jre8") \
+     .getOrCreate()
+
     # Define the list of data generation steps to execute in order
     # Prefixing an item with '!' means it's skipped (likely handled elsewhere)
-    scenario = ["create_tables", 
+    scenario = ["!create_tables", 
                 "!seed_products",
                 "!seed_productcategories",
-                "seed_customers",
-                "batch_seed_orders",
-                "seed_orders", 
-                "seed_payments",
-                "seed_warehouses",
+                "!seed_customers",
+                "!batch_seed_orders",
+                "!seed_orders", 
+                "!seed_payments",
+                "!seed_warehouses",
                 "seed_inventory",
-                "seed_suppliers",
-                "seed_purchase_orders"]
+                "!seed_suppliers",
+                "!seed_purchase_orders"]
     
     # Fetch test mode setting from configuration
     test_mode = Config.TEST_MODE
@@ -1805,7 +1908,7 @@ def main():
 
         # Seed inventory for products
         if "seed_inventory" in scenario:
-            cnt = seed_inventory()
+            cnt = seed_inventory(seed_spark_session, True)
             print(f"{cnt} inventory records seeded successfully.")
 
         # Seed supplier data
